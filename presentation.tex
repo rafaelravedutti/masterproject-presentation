@@ -1,0 +1,279 @@
+\documentclass[aspectratio=43,t]{beamer}
+%\documentclass[aspectratio=43,t,handout]{beamer}
+
+\usepackage[ansinew]{inputenc}
+\usepackage[T1]{fontenc}
+%English version FAU Logo
+\usepackage[english]{babel}
+%German version FAU Logo
+%\usepackage[ngerman]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{listings-rust}
+\usepackage[backend=biber,sorting=none,doi=true,style=ieee]{biblatex}
+
+% Themes:
+%  - fau:          FAU theme
+%  - fau-med:      MedFak FAU theme
+%  - fau-nat:      NatFak FAU theme
+%  - fau-phil:     PhilFak FAU theme
+%  - fau-rw:       RWFak FAU theme
+%  - fau-rw-jura:  RWFak FB Jura FAU theme
+%  - fau-rw-wiso:  RWFak FB WISO FAU theme
+%  - fau-tf:       TechFak FAU theme
+%
+% Options:
+%  - image:        Cover image on title page
+%  - plain:        Plain title page
+%  - longtitle:    Title page layout for long title
+\usetheme[longtitle]{fau}
+
+% Enable semi-transparent animation preview
+\setbeamercovered{transparent}
+
+
+\lstset{%
+  language=C++,
+  tabsize=2,
+  basicstyle=\tt\scriptsize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{green!50!black},
+  stringstyle=\color{red},
+  numbers=left,
+  numbersep=0.5em,
+  numberstyle=\tt\tiny
+}
+
+
+\defbibheading{bibliography}{}
+\addbibresource[label=primary]{references.bib}
+\nocite{*}
+
+
+% Title, authors, and date
+\title[Scalable Molecular Dynamics in AnyDSL]{Scalable AnyDSL Molecular Dynamics application with MPI}
+\subtitle{Scaling the Molecular Dynamics implementation in AnyDSL}
+\author[Rafael Ravedutti Lucio Machado]{Rafael Ravedutti Lucio Machado}
+% English version
+\institute[Chair of Computer Science 10]{Chair of Computer Science 10, Friedrich-Alexander University of Erlangen-Nuremberg}
+% German version
+%\institute[Lehrstuhl f\"ur XYZ]{Lehrstuhl f\"ur XYZ, Friedrich-Alexander-Universit\"at Erlangen-N\"urnberg}
+\date{\today}
+% Set additional logo (overwrites FAU seal)
+%\logo{\includegraphics[width=.15\textwidth]{themefau/art/xxx/xxx.pdf}}
+
+
+\begin{document}
+  % Title
+  \maketitle
+
+  { % Motivation
+    \setbeamertemplate{footline}{}
+    \begin{frame}[noframenumbering]{Motivation}
+      Some motivational example\dots
+    \end{frame}
+  }
+
+  { % Outline
+    \setbeamertemplate{footline}{}
+    \begin{frame}[noframenumbering]{Outline}
+      \tableofcontents
+    \end{frame}
+  }
+
+  % Body
+  \section{AnyDSL}
+  \begin{frame}{AnyDSL}
+    \begin{block}{Framework for development of domain-specific libraries}
+      \begin{itemize}
+        \item Higher-order functions
+        \item Thorin
+        \item Impala
+        \item Partial evaluation
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}[fragile]{AnyDSL}
+    \begin{lstlisting}[language=Rust]
+    fn main() {
+      let img = load("dragon.png");
+      let blurred = gaussian_blur(img);
+    }
+    \end{lstlisting}
+  \end{frame}
+
+  \begin{frame}[fragile]{AnyDSL}
+    \begin{lstlisting}[language=Rust]
+    fn gaussian\_blur(field: Field) -> Field {
+      let stencil: Stencil = { /* ... */ };
+      let mut out: Field   = { /* ... */ };
+
+      for x, y in @iterate(out) {
+        out.data(x, y) = apply_stencil(x, y, field, stencil);
+      }
+
+      out
+    }
+    \end{lstlisting}
+  \end{frame}
+
+  \begin{frame}[fragile]{AnyDSL}
+    \begin{lstlisting}[language=Rust]
+    fn iterate(field: Field, body: fn(int, int) -> ()) -> () {
+      let grid  = (field.cols, field.rows, 1);
+      let block = (128, 1, 1);
+
+      with nvvm(grid, block) {
+          let x = nvvm_tid_x() + nvvm_ntid_x() * nvvm_ctaid_x();
+          let y = nvvm_tid_y() + nvvm_ntid_y() * nvvm_ctaid_y();
+          body(x, y);
+      }
+    }
+    \end{lstlisting}
+  \end{frame}
+
+  \section{Molecular Dynamics}
+  \begin{frame}{Molecular Dynamics}
+    \begin{block}{Pair-wise interaction of particles simulation written using AnyDSL}
+      \begin{itemize}
+        \item Neighborlists
+        \item Cluster of particles
+        \item Target CPU with vectorization instructions and GPU
+      \end{itemize}
+    \end{block}
+
+    \pause
+
+    \begin{block}{Steps}
+      \begin{enumerate}
+        \item<1-> Initialize grid
+        \item<2-> Initialize clusters
+        \item<3-> Build neighbor lists
+        \item<4-> Compute forces and update particles (for 20 timesteps)
+        \item<5-> Redistribute particles and go back to item 2
+      \end{enumerate}
+    \end{block}
+  \end{frame}
+
+  \section{Proposal}
+  \begin{frame}{Proposal}
+    \begin{block}{Goals}
+      \begin{itemize}
+        \item Scalable version of the application
+        \item First: scale application on homogeneous clusters
+        \item In the future: heterogeneous clusters (both CPU and GPU nodes)
+        \item Compare scalable implementation with other state-of-the-art versions
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Proposal}
+    \begin{block}{Steps}
+      \begin{itemize}
+        \item Domain partitioning
+        \item Definition of nodes that must communicate
+        \item Synchronization of particles (every timestep)
+        \item Particle exchange (after redistribution)
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Proposal}
+    \begin{block}{Domain partitioning}
+      \begin{itemize}
+        \item Define configuration of nodes
+        \item Split domain accordingly
+        \item Define current node bounding box
+        \item Include ghost layer cells
+        \item \textbf{get\_comm\_time\_steps()}
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Proposal}
+    \begin{block}{Domain partitioning}
+      \includegraphics[width=9cm]{domain_partitioning.png}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Proposal}
+    \begin{block}{Definition of nodes that must communicate}
+      \begin{itemize}
+        \item Higher-order function for iteration
+        \item Easy to write and change with AnyDSL
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Proposal}
+    \begin{block}{Synchronization of particles}
+      \begin{itemize}
+        \item Update positions, velocity and forces of particles
+        \item One-step communication
+        \item Every \textbf{get\_comm\_time\_steps()} timesteps
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Proposal}
+    \begin{block}{Particle exchange}
+      \begin{itemize}
+        \item Exchange redistributed cells
+        \item May be a two-step communication ($N' > N + N/2$)
+        \item Every 20 timesteps (redistribution)
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \section{Experimental Results}
+  \begin{frame}{Experimental Results}
+    \begin{block}{Cluster configuration}
+      \begin{itemize}
+        \item \dots
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  %\section{}
+  %\begin{frame}{Another section}
+  %  \begin{block}{Numbered List of Items}
+  %    \begin{enumerate}
+  %      \item<2-> one
+  %      \item<3-> two
+  %      \item<4-> three
+  %      \item<5-> \dots
+  %    \end{enumerate}
+  %  \end{block}
+  %\end{frame}
+
+  %\section{Listings}
+  %\begin{frame}[fragile]{Listings}
+  %  \begin{lstlisting}[language=C++]
+  %  #include <iostream>
+  %
+  %  int main() {
+  %    std::cout << "Hello World!" << std::endl;
+  %    return 0;
+  %  }
+  %  \end{lstlisting}
+  %\end{frame}
+
+  { % Questions?
+    \setbeamertemplate{footline}{}
+    \begin{frame}[c,noframenumbering]
+      \begin{center}
+        Thanks for listening.\\
+        {\bf Any questions?}
+      \end{center}
+    \end{frame}
+
+    % References
+    \section*{References}
+    \begin{frame}[allowframebreaks,noframenumbering]{References}
+      \printbibliography
+    \end{frame}
+  }
+\end{document}
+
