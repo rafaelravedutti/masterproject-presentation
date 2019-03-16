@@ -106,7 +106,7 @@
 
   \begin{frame}[fragile]{AnyDSL}
     \begin{lstlisting}[language=Rust]
-    fn gaussian\_blur(field: Field) -> Field {
+    fn gaussian_blur(field: Field) -> Field {
       let stencil: Stencil = { /* ... */ };
       let mut out: Field   = { /* ... */ };
 
@@ -136,16 +136,17 @@
 
   \section{Molecular Dynamics}
   \begin{frame}{Molecular Dynamics}
-    \begin{block}{Pair-wise interaction of particles simulation written using AnyDSL}
+    \begin{block}{Pair-wise interaction of particles simulation implemented in AnyDSL}
       \begin{itemize}
+        \item Cells of particles (bounding boxes)
         \item Neighborlists
         \item Cluster of particles
         \item Target CPU with vectorization instructions and GPU
       \end{itemize}
     \end{block}
+  \end{frame}
 
-    \pause
-
+  \begin{frame}{Molecular Dynamics}
     \begin{block}{Steps}
       \begin{enumerate}
         \item<1-> Initialize grid
@@ -174,7 +175,7 @@
       \begin{itemize}
         \item Domain partitioning
         \item Communication pattern
-        \item Synchronization of particles (every timestep)
+        \item Synchronization of cells (every timestep)
         \item Particle exchange (after redistribution)
       \end{itemize}
     \end{block}
@@ -231,7 +232,7 @@
 
   \begin{frame}[fragile]{Domain partitioning}
     \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
-    fn @mpi_get_rank_bounding_box(
+    fn @get_comm_rank_bounding_box(
       world_size: i32,
       rank: i32,
       cell_spacing: f64,
@@ -269,7 +270,7 @@
 
   \begin{frame}[fragile]{Domain partitioning}
     \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
-    fn @mpi_get_rank_bounding_box(
+    fn @get_comm_rank_bounding_box(
       world_size: i32,
       rank: i32,
       cell_spacing: f64,
@@ -319,14 +320,13 @@
 
   \begin{frame}[fragile]{Communication pattern}
     \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
-    fn mpi_exchange_subdomains(
+    fn communication_nodes(
       world_size: i32,
       rank: i32,
       grid: Grid,
       body: fn(i32, [i32 * 3], [i32 * 3], [i32 * 3], [i32 * 3]) -> ()) -> () {
 
       let rank_index = unflat_index(rank, ...);
-
       let xprev = rank_index(0) > 0;
       let xnext = rank_index(0) < node_dims(0) - 1;
       ...
@@ -355,13 +355,42 @@
   \end{frame}
 
   \begin{frame}{Proposal}
-    \begin{block}{Synchronization of particles}
+    \begin{block}{Synchronization of cells}
       \begin{itemize}
         \item Update positions, velocity and forces of particles
         \item One-step communication
         \item Every \textbf{get\_comm\_time\_steps()} timesteps
       \end{itemize}
     \end{block}
+  \end{frame}
+
+  \begin{frame}[fragile]{Synchronization of cells}
+    \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
+    fn synchronize_ghost_layer_cells(
+      grid: &mut Grid,
+      accelerator_grid: AcceleratorGrid,
+      world_size: i32,
+      world_rank: i32) -> () {
+
+      ... /* Transfer data from accelerator to CPU */
+
+      for exchange_rank, send_begin, send_end, recv_begin, recv_end in
+          communication_nodes(world_size, world_rank, *grid) {
+
+        pack_ghost_layer_cells(
+          mpi_send_buffer, grid, accelerator_grid, send_begin, send_end);
+
+        mpih.irecv(...);
+        mpih.send(...);
+        mpih.wait(...);
+
+        unpack_ghost_layer_cells(
+          mpi_recv_buffer, grid, accelerator_grid, recv_begin, recv_end);
+      }
+
+      ... /* Transfer data from CPU to accelerator */
+    }
+    \end{lstlisting}
   \end{frame}
 
   \begin{frame}{Proposal}
@@ -374,6 +403,43 @@
     \end{block}
   \end{frame}
 
+  \begin{frame}[fragile]{Particle exchange}
+    \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
+    fn exchange_ghost_layer_particles(
+      grid: &mut Grid,
+      world_size: i32,
+      world_rank: i32) -> () {
+
+      ...
+
+      for exchange_rank, send_begin, send_end, recv_begin, recv_end in
+          communication_nodes(world_size, world_rank, *grid) {
+        ...
+
+        pack_ghost_layer_particles(..., &mut rmng_send_ptcs);
+        mpih.irecv(...);
+        mpih.send(...);
+        mpih.wait(...);
+        unpack_ghost_layer_particles(..., &mut rmng_recv_ptcs);
+
+        if(rmng_recv_ptcs > 0) {
+          mpih.irecv(...);
+        }
+
+        if(rmng_send_ptcs > 0) {
+          pack_ghost_layer_particles(...);
+          mpih.send(...);
+        }
+
+        if(rmng_recv_ptcs > 0) {
+          mpih.wait(...);
+          unpack_ghost_layer_particles(...);
+        }
+      }
+    }
+    \end{lstlisting}
+  \end{frame}
+  
   \section{Experimental Results}
   \begin{frame}{Experimental Results}
     \begin{block}{Cluster configuration}
