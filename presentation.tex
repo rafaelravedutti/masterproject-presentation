@@ -188,7 +188,7 @@
         \item Split domain accordingly
         \item Define current node bounding box
         \item Include ghost layer cells
-        \item \textbf{get\_comm\_time\_steps()}
+        \item \textbf{get\_sync\_timesteps()}
       \end{itemize}
     \end{block}
   \end{frame}
@@ -232,7 +232,7 @@
 
   \begin{frame}[fragile]{Domain partitioning}
     \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
-    fn @get_comm_rank_bounding_box(
+    fn @get_node_bounding_box(
       world_size: i32,
       rank: i32,
       cell_spacing: f64,
@@ -270,7 +270,7 @@
 
   \begin{frame}[fragile]{Domain partitioning}
     \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
-    fn @get_comm_rank_bounding_box(
+    fn @get_node_bounding_box(
       world_size: i32,
       rank: i32,
       cell_spacing: f64,
@@ -282,11 +282,11 @@
         ... /* Bounding box definition */
 
         if(rank_index(0) > 0) {
-          xmin -= (get_comm_time_steps() as f64) * cell_spacing;
+          xmin -= (get_sync_timesteps() as f64) * cell_spacing;
         }
 
         if(rank_index(0) < node_dims(0) - 1) {
-          xmax += (get_comm_time_steps() as f64) * cell_spacing;
+          xmax += (get_sync_timesteps() as f64) * cell_spacing;
         } else {
           xmax += cell_spacing;
         }
@@ -359,7 +359,7 @@
       \begin{itemize}
         \item Update positions, velocity and forces of particles
         \item One-step communication
-        \item Every \textbf{get\_comm\_time\_steps()} timesteps
+        \item Every \textbf{get\_sync\_timesteps()} timesteps
       \end{itemize}
     \end{block}
   \end{frame}
@@ -378,14 +378,14 @@
           communication_nodes(world_size, world_rank, *grid) {
 
         pack_ghost_layer_cells(
-          mpi_send_buffer, grid, accelerator_grid, send_begin, send_end);
+          comm_send_buffer, grid, accelerator_grid, send_begin, send_end);
 
         mpih.irecv(...);
         mpih.send(...);
         mpih.wait(...);
 
         unpack_ghost_layer_cells(
-          mpi_recv_buffer, grid, accelerator_grid, recv_begin, recv_end);
+          comm_recv_buffer, grid, accelerator_grid, recv_begin, recv_end);
       }
 
       ... /* Transfer data from CPU to accelerator */
