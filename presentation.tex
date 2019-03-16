@@ -173,7 +173,7 @@
     \begin{block}{Steps}
       \begin{itemize}
         \item Domain partitioning
-        \item Definition of nodes that must communicate
+        \item Communication pattern
         \item Synchronization of particles (every timestep)
         \item Particle exchange (after redistribution)
       \end{itemize}
@@ -192,6 +192,116 @@
     \end{block}
   \end{frame}
 
+  \begin{frame}[fragile]{Domain partitioning}
+    \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
+      fn get_node_config(
+        world_size: i32,
+        rank: i32,
+        xcells: i32, 
+        ycells: i32, 
+        zcells: i32) -> [i32 * 3] { 
+
+        let mut gx = 1, gy = 1, gz = 1; 
+        let mut min_missing_factor = xcells * ycells * zcells;
+
+        for i in range(1, world_size) {
+          if(world_size % i == 0) { 
+            let rem_yz = world_size / i; 
+
+            for j in range(1, rem_yz) {
+              if(rem_yz % j == 0) { 
+                let k = rem_yz / j; 
+                let missing_factor = xcells % i + ycells % j + zcells % k; 
+
+                if(min_missing_factor > missing_factor) {
+                  gx = i; 
+                  gy = j; 
+                  gz = k; 
+                  min_missing_factor = missing_factor;
+                }
+              }
+            }    
+          }    
+        }
+
+        [gx, gy, gz]
+      }
+    \end{lstlisting}
+  \end{frame}
+
+  \begin{frame}[fragile]{Domain partitioning}
+    \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
+    fn @mpi_get_rank_bounding_box(
+      world_size: i32,
+      rank: i32,
+      cell_spacing: f64,
+      aabb: AABB) -> AABB {
+
+      let mut xmin, xmax, ymin, ymax, zmin, zmax: f64;
+
+      if(world_size > 1) {
+        let xcells = math.floor((aabb.max(0) - aabb.min(0)) / cell_spacing) as i32;
+        ... /* Analogous to x */
+
+        node_dims = get_node_config(world_size, rank, xcells, ycells, zcells);
+
+        let xlength = (xcells / node_dims(0)) as f64 * cell_spacing;
+        ... /* Analogous to x */
+
+        let rank_index = unflat_index(rank, node_dims(0), node_dims(1), node_dims(2));
+
+        xmin = aabb.min(0) + xlength * (rank_index(0) as f64);
+        xmax = aabb.min(0) + xlength * ((rank_index(0) + 1) as f64);
+        ... /* Analogous to x */
+
+        ... /* Include ghost zone */
+      } else {
+        ... /* 1 node case */
+      }
+
+      AABB {
+        min: [xmin, ymin, zmin],
+        max: [xmax, ymax, zmax]
+      }
+    }
+    \end{lstlisting}
+  \end{frame}
+
+  \begin{frame}[fragile]{Domain partitioning}
+    \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
+    fn @mpi_get_rank_bounding_box(
+      world_size: i32,
+      rank: i32,
+      cell_spacing: f64,
+      aabb: AABB) -> AABB {
+
+      let mut xmin, xmax, ymin, ymax, zmin, zmax: f64;
+
+      if(world_size > 1) {
+        ... /* Bounding box definition */
+
+        if(rank_index(0) > 0) {
+          xmin -= (get_comm_time_steps() as f64) * cell_spacing;
+        }
+
+        if(rank_index(0) < node_dims(0) - 1) {
+          xmax += (get_comm_time_steps() as f64) * cell_spacing;
+        } else {
+          xmax += cell_spacing;
+        }
+        ... /* Analogous to x */
+      } else {
+        ... /* 1 node case */
+      }
+
+      AABB {
+        min: [xmin, ymin, zmin],
+        max: [xmax, ymax, zmax]
+      }
+    }
+    \end{lstlisting}
+  \end{frame}
+
   \begin{frame}{Proposal}
     \begin{block}{Domain partitioning}
       \includegraphics[width=9cm]{domain_partitioning.png}
@@ -199,12 +309,49 @@
   \end{frame}
 
   \begin{frame}{Proposal}
-    \begin{block}{Definition of nodes that must communicate}
+    \begin{block}{Communication pattern}
       \begin{itemize}
         \item Higher-order function for iteration
         \item Easy to write and change with AnyDSL
       \end{itemize}
     \end{block}
+  \end{frame}
+
+  \begin{frame}[fragile]{Communication pattern}
+    \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
+    fn mpi_exchange_subdomains(
+      world_size: i32,
+      rank: i32,
+      grid: Grid,
+      body: fn(i32, [i32 * 3], [i32 * 3], [i32 * 3], [i32 * 3]) -> ()) -> () {
+
+      let rank_index = unflat_index(rank, ...);
+
+      let xprev = rank_index(0) > 0;
+      let xnext = rank_index(0) < node_dims(0) - 1;
+      ...
+
+      if(xnext) {
+        @@body(
+          flat_index(
+            [rank_index(0) + 1, rank_index(1), rank_index(2)],
+            node_dims(0), node_dims(1)),
+          send_begin1, send_end1, recv_begin1, recv_end1 // for xnext communication
+        );     
+      }
+
+      if(xprev) {
+        @@body(
+          flat_index(
+            [rank_index(0) - 1, rank_index(1), rank_index(2)],
+            node_dims(0), node_dims(1)),
+          send_begin2, send_end2, recv_begin2, recv_end2 // for xprev communication
+        );     
+      }
+
+      ... /* Analogous to x */
+    }
+    \end{lstlisting}
   \end{frame}
 
   \begin{frame}{Proposal}
