@@ -1,0 +1,12 @@
+set term png
+set output "strong_scaling.png"
+set title "Results for strong scaling tests"
+set style data linespoints
+set xlabel "Number of MPI nodes"
+set xrange [0:16]
+set ylabel "Time (miliseconds)"
+set yrange [0:200000]
+set datafile separator " "
+set key noenhanced
+set key right top
+plot "strong_scaling.dat" using 2:xtic(1) title "sync_ts=1"
