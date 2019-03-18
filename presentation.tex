@@ -71,7 +71,7 @@
   { % Motivation
     \setbeamertemplate{footline}{}
     \begin{frame}[noframenumbering]{Motivation}
-      Some motivational example\dots
+      Compare AnyDSL scalable application with other state-of-the-art technologies in order to explore benefits in code writing and performance.
     \end{frame}
   }
 
@@ -444,7 +444,55 @@
   \begin{frame}{Experimental Results}
     \begin{block}{Cluster configuration}
       \begin{itemize}
+        \item 36-CPU High-Performance-Cluster
+        \item 8 compute nodes
+        \item 4 x Intel(R) Xeon(R) CPU E7-4830, 2.13 GHz 2.4GHz (max. turbo) (8 cores + SMT), SSE 4.1/4.2, 24 MB shared cache
+        \item 256 GB RAM
+        \item 2 x 300 GB SAS internal disks
+        \item NVIDIA GeForce GTX 680
+        \item QDR Infiniband network
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Experimental Results}
+    \begin{block}{Strong scaling}
+      \begin{itemize}
+        \item Grid size: 128x128x128
+        \item About 2 million particles
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Proposal}
+    \begin{block}{Strong scaling}
+      \includegraphics[width=9cm]{results/strong_scaling.png}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Experimental Results}
+    \begin{block}{Weak scaling}
+      \begin{itemize}
+        \item \textcolor{red}{\textbf{Problem: cannot use enough particles (too much memory)}}
+        \item Must fix this in order to get good weak scaling results
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Experimental Results}
+    \begin{block}{Weak scaling}
+      \begin{itemize}
         \item \dots
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Future work}
+    \begin{block}{Future work}
+      \begin{itemize}
+        \item Reduce memory usage by application
+        \item Improve partitioning for heterogeneous clusters
+        \item Compare with state-of-the-art applications
       \end{itemize}
     \end{block}
   \end{frame}
