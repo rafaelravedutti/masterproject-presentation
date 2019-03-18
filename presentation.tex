@@ -238,62 +238,24 @@
       cell_spacing: f64,
       aabb: AABB) -> AABB {
 
-      let mut xmin, xmax, ymin, ymax, zmin, zmax: f64;
+      let mut xmin, xmax, ... : f64;
 
-      if(world_size > 1) {
-        let xcells = math.floor((aabb.max(0) - aabb.min(0)) / cell_spacing) as i32;
-        ... /* Analogous to x */
+      let xcells = math.floor((aabb.max(0) - aabb.min(0)) / cell_spacing);
+      let xlength = (xcells / node_dims(0)) * cell_spacing;
+      let rank_index = unflat_index(rank, ...);
 
-        node_dims = get_node_config(world_size, rank, xcells, ycells, zcells);
+      xmin = aabb.min(0) + xlength * rank_index(0);
+      xmax = aabb.min(0) + xlength * (rank_index(0) + 1);
 
-        let xlength = (xcells / node_dims(0)) as f64 * cell_spacing;
-        ... /* Analogous to x */
-
-        let rank_index = unflat_index(rank, node_dims(0), node_dims(1), node_dims(2));
-
-        xmin = aabb.min(0) + xlength * (rank_index(0) as f64);
-        xmax = aabb.min(0) + xlength * ((rank_index(0) + 1) as f64);
-        ... /* Analogous to x */
-
-        ... /* Include ghost zone */
-      } else {
-        ... /* 1 node case */
+      if(rank_index(0) > 0) {
+        xmin -= get_sync_timesteps() * cell_spacing;
       }
 
-      AABB {
-        min: [xmin, ymin, zmin],
-        max: [xmax, ymax, zmax]
+      if(rank_index(0) < node_dims(0) - 1) {
+        xmax += get_sync_timesteps() * cell_spacing;
       }
-    }
-    \end{lstlisting}
-  \end{frame}
 
-  \begin{frame}[fragile]{Domain partitioning}
-    \begin{lstlisting}[basicstyle=\tiny\ttfamily,language=Rust]
-    fn @get_node_bounding_box(
-      world_size: i32,
-      rank: i32,
-      cell_spacing: f64,
-      aabb: AABB) -> AABB {
-
-      let mut xmin, xmax, ymin, ymax, zmin, zmax: f64;
-
-      if(world_size > 1) {
-        ... /* Bounding box definition */
-
-        if(rank_index(0) > 0) {
-          xmin -= (get_sync_timesteps() as f64) * cell_spacing;
-        }
-
-        if(rank_index(0) < node_dims(0) - 1) {
-          xmax += (get_sync_timesteps() as f64) * cell_spacing;
-        } else {
-          xmax += cell_spacing;
-        }
-        ... /* Analogous to x */
-      } else {
-        ... /* 1 node case */
-      }
+      /* y and z are analogous to x */
 
       AABB {
         min: [xmin, ymin, zmin],
@@ -326,30 +288,23 @@
       grid: Grid,
       body: fn(i32, [i32 * 3], [i32 * 3], [i32 * 3], [i32 * 3]) -> ()) -> () {
 
-      let rank_index = unflat_index(rank, ...);
-      let xprev = rank_index(0) > 0;
-      let xnext = rank_index(0) < node_dims(0) - 1;
       ...
 
-      if(xnext) {
+      if(rank_index(0) < node_dims(0)) {
         @@body(
-          flat_index(
-            [rank_index(0) + 1, rank_index(1), rank_index(2)],
-            node_dims(0), node_dims(1)),
-          send_begin1, send_end1, recv_begin1, recv_end1 // for xnext communication
+          flat_index([rank_index(0) + 1, rank_index(1), rank_index(2)], ...),
+          send_begin1, send_end1, recv_begin1, recv_end1 // regions to communicate
         );     
       }
 
-      if(xprev) {
+      if(rank_index(0) > 0) {
         @@body(
-          flat_index(
-            [rank_index(0) - 1, rank_index(1), rank_index(2)],
-            node_dims(0), node_dims(1)),
-          send_begin2, send_end2, recv_begin2, recv_end2 // for xprev communication
+          flat_index([rank_index(0) - 1, rank_index(1), rank_index(2)], ...),
+          send_begin2, send_end2, recv_begin2, recv_end2 // regions to communicate
         );     
       }
 
-      ... /* Analogous to x */
+      ... /* y and z are analogous to x */
     }
     \end{lstlisting}
   \end{frame}
@@ -377,15 +332,13 @@
       for exchange_rank, send_begin, send_end, recv_begin, recv_end in
           communication_nodes(world_size, world_rank, *grid) {
 
-        pack_ghost_layer_cells(
-          comm_send_buffer, grid, accelerator_grid, send_begin, send_end);
+        pack_ghost_layer_cells(..., send_begin, send_end);
 
         mpih.irecv(...);
         mpih.send(...);
         mpih.wait(...);
 
-        unpack_ghost_layer_cells(
-          comm_recv_buffer, grid, accelerator_grid, recv_begin, recv_end);
+        unpack_ghost_layer_cells(..., recv_begin, recv_end);
       }
 
       ... /* Transfer data from CPU to accelerator */
@@ -456,6 +409,15 @@
   \end{frame}
 
   \begin{frame}{Experimental Results}
+    \begin{block}{Cluster mapping}
+      \begin{itemize}
+        \item MPI processes are mapped to different CPU cores in the same cluster node
+        \item We bind processes to sockets for better memory usage
+      \end{itemize}
+    \end{block}
+  \end{frame}
+
+  \begin{frame}{Experimental Results}
     \begin{block}{Strong scaling}
       \begin{itemize}
         \item Grid size: 128x128x128
@@ -466,7 +428,7 @@
 
   \begin{frame}{Proposal}
     \begin{block}{Strong scaling}
-      \includegraphics[width=9cm]{results/strong_scaling.png}
+      \includegraphics[width=9cm]{results/strong_scaling.pdf}
     \end{block}
   \end{frame}
 
@@ -482,13 +444,13 @@
   \begin{frame}{Experimental Results}
     \begin{block}{Weak scaling}
       \begin{itemize}
-        \item \dots
+        \item \includegraphics[width=9cm]{results/weak_scaling.pdf}
       \end{itemize}
     \end{block}
   \end{frame}
 
   \begin{frame}{Future work}
-    \begin{block}{Future work}
+    \begin{block}{}
       \begin{itemize}
         \item Reduce memory usage by application
         \item Improve partitioning for heterogeneous clusters

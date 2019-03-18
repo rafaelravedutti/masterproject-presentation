@@ -1,5 +1,5 @@
-set term png
-set output "strong_scaling.png"
+set term pdf
+set output "strong_scaling.pdf"
 set title "Results for strong scaling tests"
 set style data linespoints
 set xlabel "Number of MPI nodes"
@@ -7,6 +7,7 @@ set xrange [0:16]
 set ylabel "Time (miliseconds)"
 set yrange [0:260]
 set datafile separator " "
+set autoscale x
 set key noenhanced
 set key right top
 plot "strong_scaling.dat" using 2:xtic(1) title "sync_ts=1", '' using 3:xtic(1) title "sync_ts=2", '' using 4:xtic(1) title "sync_ts=4"
