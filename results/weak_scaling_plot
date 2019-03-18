@@ -1,0 +1,12 @@
+set term png
+set output "weak_scaling.png"
+set title "Results for weak scaling tests"
+set style data linespoints
+set xlabel "Number of MPI nodes"
+set xrange [0:16]
+set ylabel "Time (miliseconds)"
+set yrange [0:600]
+set datafile separator " "
+set key noenhanced
+set key right top
+plot "weak_scaling.dat" using 2:xtic(1) title "sync_ts=1", '' using 3:xtic(1) title "sync_ts=2", '' using 4:xtic(1) title "sync_ts=4"
